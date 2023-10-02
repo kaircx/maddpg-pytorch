@@ -106,7 +106,7 @@ def run(config):
                     if config.parameter_sharing:
                         sample = replay_buffer.sample(config.batch_size, to_gpu=USE_CUDA)
                         
-                        for i in range(3):                               
+                        for i in range(maddpg.nagents):                               
                             for a_i in range(maddpg.nagents):
                                 maddpg.update(sample, a_i, logger=logger)  
                             maddpg.update_all_targets()
