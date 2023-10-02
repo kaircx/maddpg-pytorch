@@ -67,7 +67,7 @@ class MADDPG(object):
         for a in self.agents:
             a.reset_noise()
 
-    def step(self, observations, explore=False):
+    def step(self, observations, explore=False, parameter_sharing=False):
         """
         Take a step forward in environment with all agents
         Inputs:
@@ -75,9 +75,13 @@ class MADDPG(object):
             explore (boolean): Whether or not to add exploration noise
         Outputs:
             actions: List of actions for each agent
-        """
-        return [a.step(obs, explore=explore) for a, obs in zip(self.agents,
+        """     
+        if parameter_sharing==True:
+            return [self.agents[0].step(obs, explore=explore) for obs in observations] 
+        else: 
+            return [a.step(obs, explore=explore) for a, obs in zip(self.agents,
                                                                  observations)]
+
 
     def update(self, sample, agent_i, parallel=False, logger=None):
         """
@@ -104,25 +108,25 @@ class MADDPG(object):
                 all_trgt_acs = [pi(nobs) for pi, nobs in zip(self.target_policies,
                                                              next_obs)]
             trgt_vf_in = torch.cat((*next_obs, *all_trgt_acs), dim=1)
-        else:  # DDPG
-            if self.discrete_action:
-                trgt_vf_in = torch.cat((next_obs[agent_i],
-                                        onehot_from_logits(
-                                            curr_agent.target_policy(
-                                                next_obs[agent_i]))),
-                                       dim=1)
-            else:
-                trgt_vf_in = torch.cat((next_obs[agent_i],
-                                        curr_agent.target_policy(next_obs[agent_i])),
-                                       dim=1)
+        # else:  # DDPG
+        #     if self.discrete_action:
+        #         trgt_vf_in = torch.cat((next_obs[agent_i],
+        #                                 onehot_from_logits(
+        #                                     curr_agent.target_policy(
+        #                                         next_obs[agent_i]))),
+        #                                dim=1)
+        #     else:
+        #         trgt_vf_in = torch.cat((next_obs[agent_i],
+        #                                 curr_agent.target_policy(next_obs[agent_i])),
+        #                                dim=1)
         target_value = (rews[agent_i].view(-1, 1) + self.gamma *
                         curr_agent.target_critic(trgt_vf_in) *
                         (1 - dones[agent_i].view(-1, 1)))
 
         if self.alg_types[agent_i] == 'MADDPG':
             vf_in = torch.cat((*obs, *acs), dim=1)
-        else:  # DDPG
-            vf_in = torch.cat((obs[agent_i], acs[agent_i]), dim=1)
+        # else:  # DDPG
+        #     vf_in = torch.cat((obs[agent_i], acs[agent_i]), dim=1)
         actual_value = curr_agent.critic(vf_in)
         vf_loss = MSELoss(actual_value, target_value.detach())
         vf_loss.backward()
@@ -154,9 +158,9 @@ class MADDPG(object):
                 else:
                     all_pol_acs.append(pi(ob))
             vf_in = torch.cat((*obs, *all_pol_acs), dim=1)
-        else:  # DDPG
-            vf_in = torch.cat((obs[agent_i], curr_pol_vf_in),
-                              dim=1)
+        # else:  # DDPG
+        #     vf_in = torch.cat((obs[agent_i], curr_pol_vf_in),
+        #                       dim=1)
         pol_loss = -curr_agent.critic(vf_in).mean()
         pol_loss += (curr_pol_out**2).mean() * 1e-3
         pol_loss.backward()

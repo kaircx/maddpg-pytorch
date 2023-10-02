@@ -11,7 +11,7 @@ class Scenario(BaseScenario):
         num_fast_agents = 1
         num_slow_agents = 1 ##advarsarial
         num_agents = num_fast_agents + num_slow_agents
-        num_landmarks = 2
+        num_landmarks = 1
         # add agents
         world.agents = [Agent() for i in range(num_agents)]
         for i, agent in enumerate(world.agents):

@@ -26,6 +26,10 @@ def make_parallel_env(env_id, n_rollout_threads, seed, discrete_action):
         return DummyVecEnv([get_env_fn(0)])
     else:
         return SubprocVecEnv([get_env_fn(i) for i in range(n_rollout_threads)])
+ 
+
+def shift_elements_3d_array(arr: np.ndarray) -> np.ndarray:
+    return np.roll(arr, shift=1, axis=0)
 
 def run(config):
     model_dir = Path('./models') / config.env_id / config.model_name
@@ -78,27 +82,72 @@ def run(config):
                                   requires_grad=False)
                          for i in range(maddpg.nagents)]
             # get actions as torch Variables
-            torch_agent_actions = maddpg.step(torch_obs, explore=True)
+            torch_agent_actions = maddpg.step(torch_obs, explore=True ,parameter_sharing=config.parameter_sharing)
             # convert actions to numpy arrays
             agent_actions = [ac.data.numpy() for ac in torch_agent_actions]
             # rearrange actions to be per environment
             actions = [[ac[i] for ac in agent_actions] for i in range(config.n_rollout_threads)]
+            # import ipdb; ipdb.set_trace()
             next_obs, rewards, dones, infos = env.step(actions)
             replay_buffer.push(obs, agent_actions, rewards, next_obs, dones)
+    
             obs = next_obs
             t += config.n_rollout_threads
             if (len(replay_buffer) >= config.batch_size and
                 (t % config.steps_per_update) < config.n_rollout_threads):
+                print(f"number of replay_buf is {len(replay_buffer)}")
+
                 if USE_CUDA:
                     maddpg.prep_training(device='gpu')
                 else:
                     maddpg.prep_training(device='cpu')
                 for u_i in range(config.n_rollout_threads):
-                    for a_i in range(maddpg.nagents):
-                        sample = replay_buffer.sample(config.batch_size,
-                                                      to_gpu=USE_CUDA)
-                        maddpg.update(sample, a_i, logger=logger)
-                    maddpg.update_all_targets()
+
+                    if config.parameter_sharing:
+                        sample = replay_buffer.sample(config.batch_size, to_gpu=USE_CUDA)
+                        
+                        for i in range(3):                               
+                            for a_i in range(maddpg.nagents):
+                                maddpg.update(sample, a_i, logger=logger)  
+                            maddpg.update_all_targets()
+
+                            sample=list(sample)
+                            for s_i,sam in enumerate(sample):
+                                sample[s_i]=shift_elements_3d_array(sam)
+                            sample=tuple(sample)
+                        
+                               
+                    else:
+                        for a_i in range(maddpg.nagents):
+                            sample = replay_buffer.sample(config.batch_size,
+                                                        to_gpu=USE_CUDA)
+                            maddpg.update(sample, a_i, logger=logger)
+                        maddpg.update_all_targets()
+
+
+
+                        # if config.parameter_sharing:
+                        #     sample=list(sample)
+                        #     for s_i,sam in enumerate(sample):
+                        #         sample[s_i]=shift_elements_3d_array(sam)
+                        #     sample=tuple(sample)
+                        #     maddpg.update(sample, a_i, logger=logger)
+
+
+                        #     sample=list(sample)
+                        #     for s_i,sam in enumerate(sample):
+                        #         sample[s_i]=shift_elements_3d_array(sam)
+                        #     sample=tuple(sample)
+                        #     maddpg.update(sample, a_i, logger=logger)
+
+
+                    
+
+                        # sample=list(sample)
+                        # for s_i,sam in enumerate(sample):
+                        #     sample[s_i]=shift_elements_3d_array(sam)
+                        # sample=tuple(sample)
+                            
                 maddpg.prep_rollouts(device='cpu')
         ep_rews = replay_buffer.get_average_rewards(
             config.episode_length * config.n_rollout_threads)
@@ -127,7 +176,7 @@ if __name__ == '__main__':
                         help="Random seed")
     parser.add_argument("--n_rollout_threads", default=1, type=int)
     parser.add_argument("--n_training_threads", default=6, type=int)
-    parser.add_argument("--buffer_length", default=int(1e6), type=int)
+    parser.add_argument("--buffer_length", default=int(1e8), type=int)
     parser.add_argument("--n_episodes", default=25000, type=int)
     parser.add_argument("--episode_length", default=25, type=int)
     parser.add_argument("--steps_per_update", default=100, type=int)
@@ -149,7 +198,7 @@ if __name__ == '__main__':
                         choices=['MADDPG', 'DDPG'])
     parser.add_argument("--discrete_action",
                         action='store_true')
-
+    parser.add_argument("--parameter_sharing",default=False, type=bool)
     config = parser.parse_args()
 
     run(config)
