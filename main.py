@@ -28,8 +28,14 @@ def make_parallel_env(env_id, n_rollout_threads, seed, discrete_action):
         return SubprocVecEnv([get_env_fn(i) for i in range(n_rollout_threads)])
  
 
-def shift_elements_3d_array(arr: np.ndarray) -> np.ndarray:
-    return np.roll(arr, shift=1, axis=0)
+def shift_elements_3d_array(tensor_list):
+    shifted_list = []
+    for arr in tensor_list:
+        arr_cpu = arr.cpu()
+        arr_numpy = arr_cpu.numpy()
+        arr_shifted = np.roll(arr_numpy, shift=1, axis=0)
+        shifted_list.append(torch.from_numpy(arr_shifted).to('cuda:0'))
+    return shifted_list
 
 def run(config):
     model_dir = Path('./models') / config.env_id / config.model_name
