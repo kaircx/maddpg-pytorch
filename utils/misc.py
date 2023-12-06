@@ -70,11 +70,11 @@ def sample_gumbel(shape, eps=1e-20, tens_type=torch.FloatTensor):
 # modified for PyTorch from https://github.com/ericjang/gumbel-softmax/blob/master/Categorical%20VAE.ipynb
 def gumbel_softmax_sample(logits, temperature):
     """ Draw a sample from the Gumbel-Softmax distribution"""
-    y = logits + sample_gumbel(logits.shape, tens_type=type(logits.data))
-    return F.softmax(y / temperature, dim=1)
+    y = logits + sample_gumbel(logits.shape, tens_type=type(logits.data)).to(logits.device)
+    return F.softmax(y / temperature, dim=-1)
 
 # modified for PyTorch from https://github.com/ericjang/gumbel-softmax/blob/master/Categorical%20VAE.ipynb
-def gumbel_softmax(logits, temperature=1.0, hard=False):
+def gumbel_softmax(logits, temperature=1.0, hard=False, device='cuda'):
     """Sample from the Gumbel-Softmax distribution and optionally discretize.
     Args:
       logits: [batch_size, n_class] unnormalized log-probs
