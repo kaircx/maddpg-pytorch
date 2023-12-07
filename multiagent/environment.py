@@ -155,24 +155,35 @@ class MultiAgentEnv(gym.Env):
             action = act
         else:
             action = [action]
-
+        
         if agent.movable:
             # physical action
             if self.discrete_action_input:
                 agent.action.u = np.zeros(self.world.dim_p)
                 # process discrete action
-                if action[0] == 1: agent.action.u[0] = -1.0
-                if action[0] == 2: agent.action.u[0] = +1.0
-                if action[0] == 3: agent.action.u[1] = -1.0
-                if action[0] == 4: agent.action.u[1] = +1.0
+                if action[0] == 1: agent.action.u[0] = -1.0#LEFT
+                if action[0] == 2: agent.action.u[0] = +1.0#RIGHT
+                if action[0] == 3: agent.action.u[1] = -1.0#UP
+                if action[0] == 4: agent.action.u[1] = +1.0#DOWN
+                
+                if hasattr(agent,'right'):            
+                    if agent.right==True:
+                        agent.action.u[0] = max(agent.action.u[0],0.0)
+                    else:
+                        agent.action.u[0] = min(agent.action.u[0],0.0)
             else:
                 if self.force_discrete_action:
                     d = np.argmax(action[0])
                     action[0][:] = 0.0
                     action[0][d] = 1.0
-                if self.discrete_action_space:
+                if self.discrete_action_space:#zikouzi
                     agent.action.u[0] += action[0][1] - action[0][2]
                     agent.action.u[1] += action[0][3] - action[0][4]
+                    if hasattr(agent,'right'):
+                        if agent.right==True:
+                            agent.action.u[0] = max(agent.action.u[0],0.0)
+                        else:
+                            agent.action.u[0] = min(agent.action.u[0],0.0)
                 else:
                     agent.action.u = action[0]
             sensitivity = 5.0
