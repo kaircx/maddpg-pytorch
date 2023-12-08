@@ -13,14 +13,14 @@ class Scenario(BaseScenario):
         num_agents = num_right_agents + num_left_agents
         num_landmarks = 2
         # add agents
-        r=[True,False]
+        r=[1,2]
         random.shuffle(r)
         world.agents = [Agent() for i in range(num_agents)]
         for i, agent in enumerate(world.agents):
             agent.name = 'agent %d' % i
-            agent.collide = True
-            agent.silent = False
-            agent.right = r[i] 
+            agent.collide = False
+            agent.silent = True
+            agent.right = random.choices([0, 1, -1], weights=[10, 10, 10], k=1)[0]#random.choice(r)
             agent.size =0.15
             agent.accel = 4.0
             agent.max_speed = 0.5 
@@ -39,13 +39,14 @@ class Scenario(BaseScenario):
     def reset_world(self, world):
         # random properties for agents
         for i, agent in enumerate(world.agents):
-            agent.color = np.array([0.35, 0.85, 0.35]) if agent.right else np.array([0.85, 0.35, 0.35])
+            color = [np.array([0.35, 0.35, 0.85]), np.array([0.35, 0.85, 0.35]) ,np.array([0.85, 0.35, 0.35])]
+            agent.color =color[agent.right]
             # random properties for landmarks
         for i, landmark in enumerate(world.landmarks):
             landmark.color = np.array([0.25, 0.25, 0.25])
         # set random initial states
         for agent in world.agents:
-            agent.state.p_pos =  np.array([np.random.uniform(-0.3, 0.3), np.random.uniform(-1, -0.5)])# if hasattr(agent,"right")else np.array([np.random.uniform(0, 0.5), np.random.uniform(-1, 0.5)])
+            agent.state.p_pos =  np.array([np.random.uniform(-0.3, 0.3), np.random.uniform(-0.8, -0.5)])# if hasattr(agent,"right")else np.array([np.random.uniform(0, 0.5), np.random.uniform(-1, 0.5)])
             agent.state.p_vel = np.zeros(world.dim_p)
             agent.state.c = np.zeros(world.dim_c)
         for i, landmark in enumerate(world.landmarks):
@@ -60,7 +61,7 @@ class Scenario(BaseScenario):
         occupied_landmarks = 0
         min_dists = 0
         for l in world.landmarks:
-            dists = [np.sqrt(np.sum(np.square(a.state.p_pos - l.state.p_pos))) for a in world.agents]
+            dists = [np.sum(np.square(a.state.p_pos - l.state.p_pos)) for a in world.agents]
             min_dists += min(dists)
             rew -= min(dists)
             if min(dists) < 0.1:
@@ -111,7 +112,7 @@ class Scenario(BaseScenario):
         # 各ランドマークに対して最も近いエージェントの距離を計算
         min_dists_to_landmarks = []
         for l in world.landmarks:
-            dists = [np.sqrt(np.sum(np.square(a.state.p_pos - l.state.p_pos))) for a in world.agents]
+            dists = [np.sum(np.square(a.state.p_pos - l.state.p_pos)) for a in world.agents]
             min_dist = min(dists)
             min_dists_to_landmarks.append(min_dist)
             rew -= min_dist
@@ -123,11 +124,11 @@ class Scenario(BaseScenario):
             print("clear!!")
             print(min_dists_to_landmarks)
 
-        # 衝突に対するペナルティ
-        if agent.collide:
-            for a in world.agents:
-                if self.is_collision(a, agent):
-                    rew -= 1
+        # # 衝突に対するペナルティ
+        # if agent.collide:
+        #     for a in world.agents:
+        #         if self.is_collision(a, agent):
+        #             rew -= 1
         # print(f"reward is {rew}")
         return rew
 
@@ -149,5 +150,6 @@ class Scenario(BaseScenario):
             if other is agent: continue
             comm.append(other.state.c)
             other_pos.append(other.state.p_pos - agent.state.p_pos)
-        return np.concatenate( [agent.state.p_pos] + entity_pos + other_pos + comm + [np.array([1.0 if agent.right else 0.0])])
-        return np.concatenate([agent.state.p_pos] + entity_pos + other_pos)#+ [np.array([1.0 if agent.right else 0.0])])
+        return np.concatenate( [agent.state.p_pos]+ entity_pos + [np.array([agent.right])])
+    
+        return np.concatenate([agent.state.p_pos] + entity_pos )
