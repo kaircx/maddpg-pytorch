@@ -33,6 +33,7 @@ class Scenario(BaseScenario):
             landmark.size = 0.1
         # make initial conditions
         self.reset_world(world)
+        random.seed(123)
         return world
 
 
@@ -64,7 +65,7 @@ class Scenario(BaseScenario):
             dists = [np.sum(np.square(a.state.p_pos - l.state.p_pos)) for a in world.agents]
             min_dists += min(dists)
             rew -= min(dists)
-            if min(dists) < 0.1:
+            if min(dists) < 0.05:
                 occupied_landmarks += 1
         if agent.collide:
             for a in world.agents:
@@ -118,7 +119,7 @@ class Scenario(BaseScenario):
             rew -= min_dist
         # 全てのエージェントが全てのランドマークに到達した場合の報酬調整
 
-        if all(dist < 0.03 for dist in min_dists_to_landmarks):  # some_threshold は適切な閾値
+        if all(dist < 0.05 for dist in min_dists_to_landmarks):  # some_threshold は適切な閾値
             rew += sum(min_dists_to_landmarks)
             rew += 0.1   # マイナスされた報酬を戻す
             print("clear!!")

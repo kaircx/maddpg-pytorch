@@ -41,9 +41,10 @@ def run(config):
                                   requires_grad=False)
                          for i in range(maddpg.nagents)]
             # get actions as torch Variables
-            torch_actions = maddpg.step(torch_obs, explore=False)
+            torch_actions = maddpg.step(torch_obs, explore=False, parameter_sharing=config.parameter_sharing)
             # convert actions to numpy arrays
             actions = [ac.data.numpy().flatten() for ac in torch_actions]
+            print(actions)
             obs, rewards, dones, infos = env.step(actions)
             if config.save_gifs:
                 frames.append(env.render('rgb_array')[0])
@@ -74,9 +75,9 @@ if __name__ == '__main__':
                         help="Load incremental policy from given episode " +
                              "rather than final policy")
     parser.add_argument("--n_episodes", default=10, type=int)
-    parser.add_argument("--episode_length", default=25, type=int)
+    parser.add_argument("--episode_length", default=150, type=int)
     parser.add_argument("--fps", default=30, type=int)
-
+    parser.add_argument("--parameter_sharing",default=False, type=bool)
     config = parser.parse_args()
 
     run(config)

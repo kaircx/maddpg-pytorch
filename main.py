@@ -28,13 +28,23 @@ def make_parallel_env(env_id, n_rollout_threads, seed, discrete_action):
         return SubprocVecEnv([get_env_fn(i) for i in range(n_rollout_threads)])
  
 
-def shift_elements_3d_array(tensor_list):
+def shift_elements_3d_array(tensor_list,axis=0):
     shifted_list = []
-    for arr in tensor_list:
-        arr_cpu = arr.cpu()
-        arr_numpy = arr_cpu.numpy()
-        arr_shifted = np.roll(arr_numpy, shift=1, axis=0)
-        shifted_list.append(torch.from_numpy(arr_shifted).to('cuda:0'))
+    # for arr in tensor_list:
+    #     if torch.is_tensor(arr):
+    #         arr_cpu = arr.cpu()
+    #         arr_numpy = arr_cpu.numpy()
+    #         arr_shifted = np.roll(arr_numpy, shift=1, axis=axis)
+    #         shifted_list.append(torch.from_numpy(arr_shifted).to('cuda:0'))
+    if isinstance(tensor_list, np.ndarray):
+        arr_shifted = np.roll(tensor_list, shift=1, axis=axis)
+        shifted_list=arr_shifted
+    elif isinstance(tensor_list, list):
+        arr_numpy = np.array(tensor_list)
+        arr_shifted = np.roll(arr_numpy, shift=1, axis=axis)
+        shifted_list=list(arr_shifted)
+    else:
+        raise TypeError("Unsupported array type")
     return shifted_list
 
 def run(config):
@@ -88,15 +98,24 @@ def run(config):
                                   requires_grad=False)
                          for i in range(maddpg.nagents)]
             # get actions as torch Variables
-            torch_agent_actions = maddpg.step(torch_obs, explore=True ,parameter_sharing=config.parameter_sharing)
-            # convert actions to numpy arrays
-            agent_actions = [ac.data.numpy() for ac in torch_agent_actions]
-            # rearrange actions to be per environment
+            torch_agent_actions = maddpg.step(torch_obs, explore=True,parameter_sharing=config.parameter_sharing)
+            agent_actions = [ac.data.numpy() for ac in torch_agent_actions] 
             actions = [[ac[i] for ac in agent_actions] for i in range(config.n_rollout_threads)]
-            # import ipdb; ipdb.set_trace()
             next_obs, rewards, dones, infos = env.step(actions)
             replay_buffer.push(obs, agent_actions, rewards, next_obs, dones)
-    
+            if config.parameter_sharing:
+                obs_t=obs
+                agent_actions_t=agent_actions
+                rewards_t=rewards
+                next_obs_t=next_obs
+                dones_t=dones
+                for i in range(maddpg.nagents):
+                    obs_t=shift_elements_3d_array(obs_t,axis=1)
+                    agent_actions_t=shift_elements_3d_array(agent_actions_t)
+                    rewards_t=shift_elements_3d_array(rewards_t)
+                    next_obs_t=shift_elements_3d_array(next_obs_t,axis=1)
+                    dones_t=shift_elements_3d_array(dones_t)
+                    replay_buffer.push(obs_t, agent_actions_t, rewards_t, next_obs_t, dones_t)
             obs = next_obs
             t += config.n_rollout_threads
             if (len(replay_buffer) >= config.batch_size and
@@ -109,26 +128,27 @@ def run(config):
                     maddpg.prep_training(device='cpu')
                 for u_i in range(config.n_rollout_threads):
 
-                    if config.parameter_sharing:
-                        sample = replay_buffer.sample(config.batch_size, to_gpu=USE_CUDA)
+                    # if config.parameter_sharing:
+                    #     sample = replay_buffer.sample(config.batch_size, to_gpu=USE_CUDA)
                         
-                        for i in range(maddpg.nagents):                               
-                            for a_i in range(maddpg.nagents):
-                                maddpg.update(sample, a_i, logger=logger)  
-                            maddpg.update_all_targets()
+                    #     for i in range(maddpg.nagents):                               
+                    #         for a_i in range(maddpg.nagents):
+                    #             maddpg.update(sample, a_i, logger=logger)  
+                    #         maddpg.update_all_targets()
 
-                            sample=list(sample)
-                            for s_i,sam in enumerate(sample):
-                                sample[s_i]=shift_elements_3d_array(sam)
-                            sample=tuple(sample)
+                    #         sample=list(sample)
+                    #         for s_i,sam in enumerate(sample):
+                    #             sample[s_i]=shift_elements_3d_array(sam)
+                    #         sample=tuple(sample)
                         
                                
-                    else:
-                        for a_i in range(maddpg.nagents):
-                            sample = replay_buffer.sample(config.batch_size,
-                                                        to_gpu=USE_CUDA)
-                            maddpg.update(sample, a_i, logger=logger)
-                        maddpg.update_all_targets()
+                    # else:
+                    for a_i in range(maddpg.nagents):
+                        sample = replay_buffer.sample(config.batch_size,
+                                                    to_gpu=USE_CUDA)
+                        maddpg.update(sample, a_i, logger=logger)
+                    maddpg.update_all_targets()
+                    # print("update")
 
 
 
@@ -183,11 +203,11 @@ if __name__ == '__main__':
     parser.add_argument("--n_rollout_threads", default=1, type=int)
     parser.add_argument("--n_training_threads", default=6, type=int)
     parser.add_argument("--buffer_length", default=int(1e6), type=int)
-    parser.add_argument("--n_episodes", default=25000, type=int)
+    parser.add_argument("--n_episodes", default=100000, type=int)
     parser.add_argument("--episode_length", default=100, type=int)
     parser.add_argument("--steps_per_update", default=100, type=int)
     parser.add_argument("--batch_size",
-                        default=1024, type=int,
+                        default=2048, type=int,
                         help="Batch size for model training")
     parser.add_argument("--n_exploration_eps", default=25000, type=int)
     parser.add_argument("--init_noise_scale", default=0.3, type=float)
